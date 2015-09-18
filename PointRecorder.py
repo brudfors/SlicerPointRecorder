@@ -65,8 +65,22 @@ class PointRecorderWidget(ScriptedLoadableModuleWidget):
     self.inputSelector.showChildNodeTypes = False
     self.inputSelector.setMRMLScene( slicer.mrmlScene )
     self.inputSelector.setToolTip( "Pick the input to the algorithm." )
-    parametersFormLayout.addRow("Input Transform: ", self.inputSelector)
+    parametersFormLayout.addRow("Modified Transform: ", self.inputSelector)
 
+        #
+    # input transform selector
+    #
+    self.fixedSelector = slicer.qMRMLNodeComboBox()
+    self.fixedSelector.nodeTypes = ["vtkMRMLLinearTransformNode"]
+    self.fixedSelector.selectNodeUponCreation = True
+    self.fixedSelector.addEnabled = False
+    self.fixedSelector.removeEnabled = False
+    self.fixedSelector.noneEnabled = False
+    self.fixedSelector.showChildNodeTypes = False
+    self.fixedSelector.setMRMLScene( slicer.mrmlScene )
+    self.fixedSelector.setToolTip( "Pick the input to the algorithm." )
+    parametersFormLayout.addRow("Spatial Transform: ", self.fixedSelector)
+    
      # Controls
     self.controlsGroupBox = ctk.ctkCollapsibleGroupBox()
     self.controlsGroupBox.setTitle("Controls")
@@ -123,10 +137,10 @@ class PointRecorderWidget(ScriptedLoadableModuleWidget):
   def onRecordClicked(self):   
     if not self.pointRecorderLogic.observedNode:
       self.pointRecorderLogic.removeUpdateObserver()
-      self.pointRecorderLogic.addUpdateObserver(self.inputSelector.currentNode())
+      self.pointRecorderLogic.addUpdateObserver(self.inputSelector.currentNode(), self.fixedSelector.currentNode())
       self.pointRecorderLogic.clearPointsInPolyData()
     if self.singlePointCheckBox.checked:
-      self.pointRecorderLogic.acquireSingleMeasurement(self.inputSelector.currentNode())
+      self.pointRecorderLogic.acquireSingleMeasurement(self.fixedSelector.currentNode())
       self.recordButton.checked = False
       return    
     if self.recordButton.checked:
@@ -164,10 +178,12 @@ class PointRecorderLogic(ScriptedLoadableModuleLogic):
     self.record = False
     self.recordedModelNode = None
     self.reset = False       
+    self.fixedNode = None
     
   ############## Record
-  def addUpdateObserver(self, inputNode):
+  def addUpdateObserver(self, inputNode, fixedNode):
     self.observedNode = inputNode
+    self.fixedNode = fixedNode
     self.recordedModelNode = slicer.util.getNode('RecordedModel')
     if not self.recordedModelNode:
       recordedPoints = vtk.vtkPoints()
@@ -191,12 +207,13 @@ class PointRecorderLogic(ScriptedLoadableModuleLogic):
       self.clearPointsInPolyData()
       self.reset = False
     if self.record:
-      self.acquireSingleMeasurement(modifiedNode)
+      self.acquireSingleMeasurement(self.fixedNode)
       
   def acquireSingleMeasurement(self, transformNode):
     ras = [0,0,0]
     m = vtk.vtkMatrix4x4()
-    transformNode.GetMatrixTransformToParent(m)
+    transformNode.GetMatrixTransformToWorld(m)
+    print m
     ras[0] = m.GetElement(0, 3)
     ras[1] = m.GetElement(1, 3)
     ras[2] = m.GetElement(2, 3)   
